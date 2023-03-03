@@ -1,10 +1,12 @@
-import { Socket } from 'dgram';
+import { WebSocketServer } from 'ws';
 import express, { json, urlencoded } from 'express';
-import { Server } from 'socket.io';
-import Http from 'http';
-
+import crypto from 'crypto';
 const app = express();
 const port = 9000;
+const wssPort = 8080;
+const wss = new WebSocketServer({ port: wssPort });
+const clients = {};
+const rooms = {};
 
 app.use(json())
 app.use(urlencoded({ extended: true }))
@@ -27,31 +29,64 @@ app.post("/ticket",(request, response) => {
       response.status(401).send('Invalid token');
     } else {
       var username = request.body.username;
+      const clientId = guid();
+      var time = Date.now();
       var ticket = {
         "token": "valid_token",
-        "gameserver": "http://127.0.0.1:9000/",
+        "gameserver": "http://127.0.0.1:" + wssPort.toString(),
         "username": username,
-        "time": Date.now(),
+        "id" : clientId,
       } 
-      console.log("valid_ticket");
       var ticketString = JSON.stringify(ticket)
+      clients[clientId] = {
+        gui: username,
+        connection: null,
+        time : time
+      }
       response.status(200).send(ticketString);
     }
   }
 });
 
-const http = Http.createServer(app);
-const io = new Server(http);
 
-io.on('connection', (socket) => {
-  console.log('a user connected');
-  socket.on('chat message', (msg) => {
-    io.emit('chat message', msg);
+
+wss.on('connection', (connection, req) => {
+  console.log(req.headers.token);
+  if(req.headers.token != "valid_token"){
+    connection.close(4500,"Wrong token");
+  }
+  var gui = req.headers.gui;
+  if(clients[gui] == null){
+    connection.close(4500,"Wrong token");
+  } 
+
+
+  connection.on("open", () => console.log("opened!"))
+  connection.on("close", () => console.log("closed!"))
+
+  connection.on('message', function(data) {
+    if (typeof(data) === "string") {
+      // client sent a string
+      console.log("string received from client -> '" + data + "'");
+
+    } else {
+      console.log("binary received from client -> " + Array.from(data).join(", ") + "");
+    }
   });
-  socket.on('disconnect', () => {
-    console.log('user disconnected');
+
+  connection.on('close', function() {
+    console.log("client left.");
   });
+  if(clients[])
+
 });
-http.listen(9001, () => {
-  console.log('Connected at 9001');
-});
+
+
+function onNewMessage(message){
+
+}
+
+const guid = () => (S4() + S4() + "-" + S4() + "-4" + S4().substr(0,3) + "-" + S4() + "-" + S4() + S4() + S4()).toLowerCase();
+function S4() {
+  return (((1+Math.random())*0x10000)|0).toString(16).substring(1); 
+}
