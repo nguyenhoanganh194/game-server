@@ -1,4 +1,8 @@
+import { Socket } from 'dgram';
 import express, { json, urlencoded } from 'express';
+import { Server } from 'socket.io';
+import Http from 'http';
+
 const app = express();
 const port = 9000;
 
@@ -28,7 +32,7 @@ app.post("/ticket",(request, response) => {
         "gameserver": "http://127.0.0.1:9000/",
         "username": username,
         "time": Date.now(),
-      }
+      } 
       console.log("valid_ticket");
       var ticketString = JSON.stringify(ticket)
       response.status(200).send(ticketString);
@@ -36,8 +40,18 @@ app.post("/ticket",(request, response) => {
   }
 });
 
+const http = Http.createServer(app);
+const io = new Server(http);
 
-app.get("/ticket",(request, response) => {
-  console.log("ok");
-  response.send("ok");
+io.on('connection', (socket) => {
+  console.log('a user connected');
+  socket.on('chat message', (msg) => {
+    io.emit('chat message', msg);
+  });
+  socket.on('disconnect', () => {
+    console.log('user disconnected');
+  });
+});
+http.listen(9001, () => {
+  console.log('Connected at 9001');
 });
