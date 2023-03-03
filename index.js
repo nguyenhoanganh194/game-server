@@ -93,8 +93,16 @@ wss.on('connection', (connection, req) => {
       case "GetMyRoomStatus":
         GetMyRoomStatus(command,connection,gui);
         break;
-      case "Ready":
-
+      case "GetMyStatus":
+        var message = {
+          command: "GetMyStatus",
+          value: JSON.stringify({
+            gui: gui,
+            roomid : clients[gui].roomid
+          })
+        }
+        connection.send(JSON.stringify(message));
+        break;
     }
     
   });
@@ -138,6 +146,10 @@ function CreateRoom(command, connection, gui){
 
 function LeaveRoom(command, connection, gui){
   var room = rooms[clients[gui].roomid];
+  var message = {
+    command: "LeaveRoom",
+    value: "Deny"
+  }
   if( room != null){
     if(room.black == gui){
       room.black = null;
@@ -149,12 +161,9 @@ function LeaveRoom(command, connection, gui){
       delete rooms[clients[gui].roomid];
     }
     clients[gui].roomid = null;
-    var message = {
-      command: "LeaveRoom",
-      value: "Accept"
-    }
-    connection.send(JSON.stringify(message));
+    message.value ="Accept";
   }
+  connection.send(JSON.stringify(message));
 }
 
 function JoinRoom(command, connection, gui){
@@ -164,14 +173,13 @@ function JoinRoom(command, connection, gui){
     if(room != null){
       if(room.white == null){
         room.white = gui;
+        clients[gui].roomid = command.value;
         isAdd = true;
       }
       else if(room.black == null){
         room.black = gui;
+        clients[gui].roomid = command.value;
         isAdd = true;
-      }
-      if(isAdd){
-        clients[gui].roomid = command.value.room;
       }
     }
   }
@@ -198,6 +206,8 @@ function GetRooms(command, connection, gui){
 
 function GetMyRoomStatus(command, connection, gui){
   var roomid = clients[gui].roomid;
+  console.log(gui);
+  console.log(roomid);
   if(roomid != null){
     var room = rooms[roomid];
     if(room != null){
