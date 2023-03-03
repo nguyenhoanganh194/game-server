@@ -93,21 +93,21 @@ wss.on('connection', (connection, req) => {
       case "GetMyRoomStatus":
         GetMyRoomStatus(command,connection,gui);
         break;
+      case "Ready":
+
     }
     
   });
 
   connection.on('close', function() {
     console.log("client left.");
+    delete clients[gui];
   });
 
 });
 
 
-const guid = () => (S4() + S4() + "-" + S4() + "-4" + S4().substr(0,3) + "-" + S4() + "-" + S4() + S4() + S4()).toLowerCase();
-function S4() {
-  return (((1+Math.random())*0x10000)|0).toString(16).substring(1); 
-}
+
 
 
 function CreateRoom(command, connection, gui){
@@ -146,7 +146,7 @@ function LeaveRoom(command, connection, gui){
       room.white = null;
     }
     if(room.black == null && room.white == null){
-      rooms[clients[gui].roomid] = null;
+      delete rooms[clients[gui].roomid];
     }
     clients[gui].roomid = null;
     var message = {
@@ -198,11 +198,8 @@ function GetRooms(command, connection, gui){
 
 function GetMyRoomStatus(command, connection, gui){
   var roomid = clients[gui].roomid;
-  console.log(roomid);
   if(roomid != null){
-
     var room = rooms[roomid];
-    console.log(room);
     if(room != null){
       var message = {
         command: "GetMyRoomStatus",
@@ -217,4 +214,9 @@ function GetMyRoomStatus(command, connection, gui){
     value: "Deny"
   }
   connection.send(JSON.stringify(message));
+}
+
+const guid = () => (S4() + S4() + "-" + S4() + "-4" + S4().substr(0,3) + "-" + S4() + "-" + S4() + S4() + S4()).toLowerCase();
+function S4() {
+  return (((1+Math.random())*0x10000)|0).toString(16).substring(1); 
 }
