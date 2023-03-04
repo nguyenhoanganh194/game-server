@@ -56,6 +56,7 @@ app.post("/ticket",(request, response) => {
 wss.on('connection', (connection, req) => {
   if(req.headers.token != "valid_token"){
     connection.close(4500,"Wrong token");
+    return;
   }
   var gui = req.headers.gui;
 
@@ -67,6 +68,7 @@ wss.on('connection', (connection, req) => {
     command: "Login",
     value: "Accept"
   }
+  SendUpdateToLoadbalancer();
   connection.send(JSON.stringify(accept));
   clients[gui].connection = connection;
 
@@ -266,7 +268,6 @@ function Move(command, connection, gui){
   if(room != null){
     if(room.whiteReady == true && room.blackReady == true){
       var move = command.value;
-      console.log(move);
       var allowMove = false;
       if(room.board.activeColor == 'w' && gui == room.white)
       {
@@ -351,6 +352,21 @@ function GetMoveFromAI(board,callback){
     callback("False");
   });
 }
+SendUpdateToLoadbalancer();
+function SendUpdateToLoadbalancer(){
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': 'valid_token'
+  };
+  axios.post('http://127.0.0.1:8001/gameserver', {
+    numClients: Object.keys(clients).length,
+    numRooms: Object.keys(rooms).length,
+  }, { headers })
+  .then((serverRespond) => {
+  })
+  .catch((error) => {
+  });
+};
 
 
 const guid = () => (S4() + S4() + "-" + S4() + "-4" + S4().substr(0,3) + "-" + S4() + "-" + S4() + S4() + S4()).toLowerCase();
