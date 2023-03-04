@@ -1,6 +1,8 @@
 import { WebSocketServer } from 'ws';
+import Ic from 'isepic-chess';
 import express, { json, urlencoded } from 'express';
 import crypto from 'crypto';
+import axios from 'axios'
 const app = express();
 const port = 9000;
 const wssPort = 8080;
@@ -98,25 +100,29 @@ wss.on('connection', (connection, req) => {
           command: "GetMyStatus",
           value: JSON.stringify({
             gui: gui,
-            roomid : clients[gui].roomid
+            roomid : clients[gui].roomid,
+            username : clients[gui].username
           })
         }
         connection.send(JSON.stringify(message));
         break;
+        case "GetReady":
+          GetReady(command,connection,gui);
+          break;
+        case "Move":
+          Move(command,connection,gui);
+          break;
     }
     
   });
 
   connection.on('close', function() {
     console.log("client left.");
+    LeaveRoom("command",connection,gui);
     delete clients[gui];
   });
 
 });
-
-
-
-
 
 function CreateRoom(command, connection, gui){
   if(clients[gui].roomid == null){
@@ -124,8 +130,15 @@ function CreateRoom(command, connection, gui){
       white : gui,
       whiteReady : false,
       black : null,
-      blackReady : false
+      blackReady : false,
+      board : Ic.Ic.initBoard()
     }
+    console.log(command.value);
+    if(command.value == "True"){
+      room.black ="AI";
+      room.blackReady = true;
+    }
+
     var roomid = guid();
     rooms[roomid] = room;
     clients[gui].roomid = roomid;
@@ -158,6 +171,9 @@ function LeaveRoom(command, connection, gui){
       room.white = null;
     }
     if(room.black == null && room.white == null){
+      delete rooms[clients[gui].roomid];
+    }
+    else if(room.black == "AI" && room.white == null){
       delete rooms[clients[gui].roomid];
     }
     clients[gui].roomid = null;
@@ -205,19 +221,14 @@ function GetRooms(command, connection, gui){
 }
 
 function GetMyRoomStatus(command, connection, gui){
-  var roomid = clients[gui].roomid;
-  console.log(gui);
-  console.log(roomid);
-  if(roomid != null){
-    var room = rooms[roomid];
-    if(room != null){
-      var message = {
-        command: "GetMyRoomStatus",
-        value: JSON.stringify(room)
-      }
-      connection.send(JSON.stringify(message));
-      return;
+  var room = GetRoomFromClient(gui);
+  if(room != null){
+    var message = {
+      command: "GetMyRoomStatus",
+      value: JSON.stringify(room)
     }
+    connection.send(JSON.stringify(message));
+    return;
   }
   var message = {
     command: "GetMyRoomStatus",
@@ -225,6 +236,122 @@ function GetMyRoomStatus(command, connection, gui){
   }
   connection.send(JSON.stringify(message));
 }
+
+function GetReady(command, connection, gui){
+  var room = GetRoomFromClient(gui);
+  if(room != null){
+    if(room.white == gui){
+      room.whiteReady = true;
+    }
+    else if(room.black == gui){
+      room.blackReady = true;
+    }
+    var message = {
+      command: "GetReady",
+      value: "Accept"
+    }
+    connection.send(JSON.stringify(message));
+    return;
+  }
+  
+  var message = {
+    command: "GetReady",
+    value: "Deny"
+  }
+  connection.send(JSON.stringify(message));
+}
+
+function Move(command, connection, gui){
+  var room = GetRoomFromClient(gui);
+  if(room != null){
+    if(room.whiteReady == true && room.blackReady == true){
+      var move = command.value;
+      console.log(move);
+      var allowMove = false;
+      if(room.board.activeColor == 'w' && gui == room.white)
+      {
+        allowMove = true;
+      }
+      else if(room.board.activeColor == 'b' && gui == room.black)
+      {
+        allowMove = true;
+      }
+      if(allowMove == true){
+        room.board.playMove(move);
+      }
+      var message = {
+        command: "Move",
+        value: room.board.fen
+      }
+      try{
+        if(room.white != null){
+          clients[room.white].connection.send(JSON.stringify(message));
+        }
+        if(room.black != null && room.black != "AI"){
+          clients[room.black].connection.send(JSON.stringify(message));
+        }
+      }
+      catch{
+
+      }
+      if(room.board.activeColor == 'b' && room.black == "AI"){
+        GetMoveFromAI(room.board, function(callbackData){
+          if(callbackData.data){
+            room.board.playMove(callbackData.data);
+          }
+          var message = {
+            command: "Move",
+            value: room.board.fen
+          }
+
+          try{
+            if(room.white != null){
+              clients[room.white].connection.send(JSON.stringify(message));
+            }
+          }
+          catch{
+          }
+        });
+      }
+      
+      return;
+    }
+  
+  }
+  var message = {
+    command: "Move",
+    value: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+  }
+  connection.send(JSON.stringify(message));
+}
+
+function GetRoomFromClient(gui){
+  var roomid = clients[gui].roomid;
+  if(roomid != null){
+    var room = rooms[roomid];
+    return room;
+  }
+  return null;
+}
+
+function GetMoveFromAI(board,callback){
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': 'valid_token'
+  };
+  axios.post('http://127.0.0.1:7000', {
+    fen: board.fen,
+  }, { headers })
+  .then((serverRespond) => {
+    console.log("Receive AI move");
+    callback(serverRespond);
+  })
+  .catch((error) => {
+    console.log(error);
+    callback("False");
+  });
+}
+
 
 const guid = () => (S4() + S4() + "-" + S4() + "-4" + S4().substr(0,3) + "-" + S4() + "-" + S4() + S4() + S4()).toLowerCase();
 function S4() {
