@@ -9,6 +9,7 @@ const wssPort = 8080;
 const wss = new WebSocketServer({ port: wssPort });
 const clients = {};
 const rooms = {};
+const LoadServerURL = "http://127.0.0.1:8001/";
 
 var aiServer = null;
 
@@ -22,6 +23,9 @@ app.listen(port, (err) => {
   console.log(`server is listening on ${port}`)
 })
 
+app.get("/",(request, response) => {
+  response.send("gameserver: " + port);
+});
 
 app.post("/ticket",(request, response) => {
   const authorizationHeader = request.headers.authorization;
@@ -386,7 +390,7 @@ function SendUpdateToLoadbalancer(){
     'Authorization': 'valid_token',
     'Port': port
   };
-  axios.post('http://127.0.0.1:8001/gameserver', {
+  axios.post(LoadServerURL + 'gameserver', {
     numClients: Object.keys(clients).length,
     numRooms: Object.keys(rooms).length,
   }, { headers })
