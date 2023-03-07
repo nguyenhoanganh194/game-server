@@ -10,6 +10,9 @@ const wss = new WebSocketServer({ port: wssPort });
 const clients = {};
 const rooms = {};
 
+var aiServer = null;
+
+
 app.use(json())
 app.use(urlencoded({ extended: true }))
 app.listen(port, (err) => {
@@ -51,6 +54,23 @@ app.post("/ticket",(request, response) => {
   }
 });
 
+app.post("/aiserver",(request, response) => {
+  const authorizationHeader = request.headers.authorization;
+  if (!authorizationHeader) {
+    console.log("Missing headers");
+    response.status(401).send('Authorization header is missing');
+    return;
+  } else {
+    if (authorizationHeader !== 'valid_token') {
+      console.log("Invalid token");
+      response.status(401).send('Invalid token');
+      return;
+    } 
+    aiServer = request.body.url;
+    console.log(aiServer);
+    response.status(200).send("ok");
+  }
+});
 
 
 wss.on('connection', (connection, req) => {
@@ -297,6 +317,9 @@ function Move(command, connection, gui){
       }
       if(room.board.activeColor == 'b' && room.black == "AI"){
         GetMoveFromAI(room.board, function(callbackData){
+          if(callbackData == false){
+            return;
+          }
           if(callbackData.data){
             room.board.playMove(callbackData.data);
           }
@@ -340,7 +363,11 @@ function GetMoveFromAI(board,callback){
     'Content-Type': 'application/json',
     'Authorization': 'valid_token'
   };
-  axios.post('http://127.0.0.1:7000', {
+  if(aiServer == null){
+    callback(false);
+    return;
+  }
+  axios.post(aiServer, {
     fen: board.fen,
   }, { headers })
   .then((serverRespond) => {
@@ -349,22 +376,28 @@ function GetMoveFromAI(board,callback){
   })
   .catch((error) => {
     console.log(error);
-    callback("False");
+    callback(false);
   });
 }
 SendUpdateToLoadbalancer();
 function SendUpdateToLoadbalancer(){
   const headers = {
     'Content-Type': 'application/json',
-    'Authorization': 'valid_token'
+    'Authorization': 'valid_token',
+    'Port': port
   };
   axios.post('http://127.0.0.1:8001/gameserver', {
     numClients: Object.keys(clients).length,
     numRooms: Object.keys(rooms).length,
   }, { headers })
   .then((serverRespond) => {
+    if(serverRespond.status == 200){
+      aiServer = serverRespond.data;
+      console.log(aiServer)
+    }
   })
   .catch((error) => {
+    console.log(error);
   });
 };
 
