@@ -10,7 +10,7 @@ const wss = new WebSocketServer({ port: wssPort });
 const clients = {};
 const rooms = {};
 const LoadServerURL = "http://127.0.0.1:8001/";
-var WSURL = "";
+var WSURL = "ws://127.0.0.1:";
 var aiServers = {};
 const headers = {
   'Content-Type': 'application/json',
@@ -418,7 +418,6 @@ async function SendUpdateToLoadbalancer(){
     axios.post(LoadServerURL + 'gameserver', ServerStatus(), { headers })
     .then((serverRespond) => {
       var ip = serverRespond.data;
-      WSURL = "ws://" + ip +":";
     })
     .catch((error) => {
       console.log(error);
