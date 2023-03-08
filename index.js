@@ -10,7 +10,7 @@ const wss = new WebSocketServer({ port: wssPort });
 const clients = {};
 const rooms = {};
 const LoadServerURL = "http://127.0.0.1:8001/";
-
+var WSURL = "";
 var aiServers = {};
 const headers = {
   'Content-Type': 'application/json',
@@ -51,7 +51,7 @@ app.post("/ticket",(request, response) => {
       var time = Date.now();
       var ticket = {
         "token": "valid_token",
-        "gameserver": "ws://127.0.0.1:" + wssPort.toString(),
+        "gameserver": WSURL + wssPort.toString(),
         "username": username,
         "id" : clientId,
       } 
@@ -388,7 +388,6 @@ function GetRoomFromClient(gui){
 function GetMoveFromAI(board,callback){
   var keys = Object.keys(aiServers);
   var server = aiServers[keys[ keys.length * Math.random() << 0]]; 
-  console.log(server);
 
   if(server == null){
     callback(false);
@@ -403,6 +402,7 @@ function GetMoveFromAI(board,callback){
   })
   .catch((error) => {
     console.log(error);
+    delete aiServers[server.ip];
     callback(false);
   });
 }
@@ -417,6 +417,8 @@ async function SendUpdateToLoadbalancer(){
   while(true){
     axios.post(LoadServerURL + 'gameserver', ServerStatus(), { headers })
     .then((serverRespond) => {
+      var ip = serverRespond.data;
+      WSURL = "ws://" + ip +":";
     })
     .catch((error) => {
       console.log(error);
