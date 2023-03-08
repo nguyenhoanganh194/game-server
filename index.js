@@ -11,8 +11,11 @@ const clients = {};
 const rooms = {};
 const LoadServerURL = "http://127.0.0.1:8001/";
 
-var aiServer = null;
-
+var aiServers = {};
+const headers = {
+  'Content-Type': 'application/json',
+  'Authorization': 'valid_token'
+};
 
 app.use(json())
 app.use(urlencoded({ extended: true }))
@@ -26,6 +29,12 @@ app.listen(port, (err) => {
 app.get("/",(request, response) => {
   response.send("gameserver: " + port);
 });
+
+app.post("/status",(request, response) => {
+  aiServers = request.body;
+  response.send(JSON.stringify(ServerStatus()));
+});
+
 
 app.post("/ticket",(request, response) => {
   const authorizationHeader = request.headers.authorization;
@@ -94,6 +103,7 @@ wss.on('connection', (connection, req) => {
   }
   SendUpdateToLoadbalancer();
   connection.send(JSON.stringify(accept));
+  console.log("Login accepted");
   clients[gui].connection = connection;
 
   connection.on("open", () => console.log("opened!"))
@@ -143,8 +153,14 @@ wss.on('connection', (connection, req) => {
   });
 
   connection.on('close', function() {
-    console.log("client left.");
     LeaveRoom("command",connection,gui);
+    axios.post(LoadServerURL + 'updateuserdata', clients[gui], { headers })
+    .then((serverRespond) => {
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+
     delete clients[gui];
   });
 
@@ -159,8 +175,15 @@ function CreateRoom(command, connection, gui){
       blackReady : false,
       board : Ic.Ic.initBoard()
     }
-    console.log(command.value);
     if(command.value == "True"){
+      if(Object.keys(aiServers).length <= 0){
+        var message = {
+          command: "CreateRoom",
+          value: "Deny"
+        }
+        connection.send(JSON.stringify(message));
+        return;
+      }
       room.black ="AI";
       room.blackReady = true;
     }
@@ -168,7 +191,7 @@ function CreateRoom(command, connection, gui){
     var roomid = guid();
     rooms[roomid] = room;
     clients[gui].roomid = roomid;
-    console.log("New room created " + roomid);
+    console.log("New room created");
     var message = {
       command: "CreateRoom",
       value: "Accept"
@@ -363,15 +386,15 @@ function GetRoomFromClient(gui){
 }
 
 function GetMoveFromAI(board,callback){
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': 'valid_token'
-  };
-  if(aiServer == null){
+  var keys = Object.keys(aiServers);
+  var server = aiServers[keys[ keys.length * Math.random() << 0]]; 
+  console.log(server);
+
+  if(server == null){
     callback(false);
     return;
   }
-  axios.post(aiServer, {
+  axios.post(server.ip, {
     fen: board.fen,
   }, { headers })
   .then((serverRespond) => {
@@ -384,27 +407,30 @@ function GetMoveFromAI(board,callback){
   });
 }
 SendUpdateToLoadbalancer();
-function SendUpdateToLoadbalancer(){
+async function SendUpdateToLoadbalancer(){
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': 'valid_token',
     'Port': port
   };
-  axios.post(LoadServerURL + 'gameserver', {
-    numClients: Object.keys(clients).length,
-    numRooms: Object.keys(rooms).length,
-  }, { headers })
-  .then((serverRespond) => {
-    if(serverRespond.status == 200){
-      aiServer = serverRespond.data;
-      console.log(aiServer)
-    }
-  })
-  .catch((error) => {
-    console.log(error);
-  });
+ 
+  while(true){
+    axios.post(LoadServerURL + 'gameserver', ServerStatus(), { headers })
+    .then((serverRespond) => {
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+    await new Promise(resolve => setTimeout(resolve, 10*1000));
+  }
 };
 
+function ServerStatus(){
+  return {
+    numClients: Object.keys(clients).length,
+    numRooms: Object.keys(rooms).length,
+  }
+}
 
 const guid = () => (S4() + S4() + "-" + S4() + "-4" + S4().substr(0,3) + "-" + S4() + "-" + S4() + S4() + S4()).toLowerCase();
 function S4() {
