@@ -2,23 +2,11 @@
  The DS project oulu course
 ## Project Instructions:
 
- ```python
-
- #Test
-@app.route("/user/add/",methods=["POST"])
-def add_user():
-    try:
-        user = models.User(
-            id = 12,
-            user_name = "12",
-            password = "12"
-        )
-        models.db.session.add(user)
-        models.db.session.commit()
-        return "Successful",201
-    except:
-        return "User already exists",409
-
-
+Install docker and deploy the auth server.
+When the auth server is deployed. Replay the "LoadServerURL" in index.js by the auth server ip.
+ ```docker
+docker build -t game_server .
+docker run -it -p {portHTTP}:{9000} -p {portWS}:{8080} game_server
 ```
+
 
